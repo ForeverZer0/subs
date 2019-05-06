@@ -5,7 +5,7 @@ require 'rainbow'
 
 require_relative '../lib/subs'
 
-options = { paths: [], lang: [] }
+options = { paths: [], lang: [], method: :hash }
 
 OptParse.new do |opts|
 
@@ -41,7 +41,7 @@ OptParse.new do |opts|
     options[:quiet] = quiet
   end
 
-  opts.on('-p', '--prompt', TrueClass, 'Prompt before downloading all found subtitles') do |prompt|
+  opts.on('-p', '--prompt', TrueClass, 'Prompt before downloading each subtitle') do |prompt|
     abort('--quiet and --prompt flags are mutually exclusive') if options[:quiet]
     options[:prompt] = prompt
   end
@@ -51,11 +51,15 @@ OptParse.new do |opts|
     half = (langs.size / 2) + 1
     (0...half).each do |i|
       left = langs[i]
-      right = langs[i + half] || Subs::Language.new(nil, nil, nil, nil, nil)
+      right = langs[i + half] || Subs::Language.new(nil, nil, nil)
       ln = left.name[0, 26]
       printf("%s - %-30s %s %s %-30s\n", Rainbow(left.iso639_2).cyan.bright, ln,
              Rainbow(right.iso639_2).cyan.bright, right.name.nil? ? '' : '-', right.name)
     end
+  end
+
+  opts.on('-m(hash|name)', '--method=(hash|name)', 'Select the search method (default: hash)') do |meth|
+    options[:method] = meth.casecmp('name').zero? ? :name : :hash
   end
 
 end.parse!
@@ -63,8 +67,76 @@ end.parse!
 options[:paths] << Dir.pwd if options[:paths].empty?
 options[:lang] << Subs::Language.from_iso639_2('eng') if options[:lang].empty?
 
+QUIET = options[:quiet]
+
 def log(text)
-  puts text unless options[:quiet]
+  puts text unless QUIET
+end
+
+def status(text)
+  $stdout << text unless QUIET
+end
+
+def warning(text)
+  puts Rainbow(text).yellow unless QUIET
+end
+
+# Compile list of videos to process
+videos = options[:paths].flat_map do |path|
+  if File.directory?(path)
+    Subs.video_search(path, options[:recursive])
+  else
+    [File.expand_path(path)]
+  end
+end
+
+# Reject videos that already have subtitles unless "clobber" option is present
+count = videos.count
+log("Found #{count} videos to process.")
+unless options[:clobber]
+  videos.reject! { |v| Subs.subtitle_exist?(v, *options[:lang]) }
+  if videos.count != count
+    log("Subtitles found for #{count - videos.count} videos, #{Rainbow('skipping').yellow}.")
+  end
+end
+
+
+
+provider = Subs::OpenSubtitles # TODO
+unless provider.connect(options[:lang].first)
+  raise Exception, 'failed to connect to provider'
+end
+
+
+videos.each do |video|
+  # Gets results using selected provider and method
+  status("Processing \"#{File.basename(video)}\"...")
+  results = options[:method] == :name ?
+                provider.name_search(video, *options[:lang]) :
+                provider.hash_search(video, *options[:lang])
+
+  # Continue if no results were found
+  if results.empty?
+    status(" #{Rainbow('No Results').red}\n")
+    next
+  end
+
+  if options[:prompt]
+    log(Rainbow(" Found #{results.size}").green.bright)
+    log(Rainbow("    Select number of file(s) to download (separate with commas)(0 to skip):").aqua)
+    results.each_with_index do |result, i|
+      log("    #{Rainbow("#{i + 1})").bright} #{result.name}")
+    end
+  else
+    choice = [results.first]
+  end
+
+  # Process subtitle file(s)
+  # choice.each do |result|
+  #
+  #
+  # end
+
 end
 
 

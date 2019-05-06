@@ -3,7 +3,7 @@ module Subs
   module OpenSubtitles
 
     OSDB_URI = 'https://api.opensubtitles.org:443/xml-rpc'.freeze
-    USER_AGENT = 'TemporaryUserAgent'.freeze
+    USER_AGENT = 'subs2'.freeze
 
     def self.compute_hash(filename)
       File.open(filename, 'rb') do |stream|
@@ -37,8 +37,6 @@ module Subs
       # Lazy-load XML-RPC gem
       require 'xmlrpc/client'
       if username && password
-        # Extremely lazy-load "digest" gem if needed for generating MD5
-        require 'digest'
         password = Digest::MD5.hexdigest(password)
       end
       @client = XMLRPC::Client.new2(OSDB_URI)
@@ -53,21 +51,32 @@ module Subs
       @client.call('LogOut', @token) rescue nil
     end
 
-    # TODO
-
-    def hash_search(filename)
-      hash = Subs.compute_hash(filename)
-      criteria = { 'moviehash' => hash, 'sublanguageid' => @locale.alpha3 }
+    def self.hash_search(filename, *languages)
+      hash = compute_hash(filename)
+      size = File.size(filename).to_s
+      langs = languages.map(&:iso639_2).join(',')
+      criteria = { 'moviehash' => hash, 'sublanguageid'  => langs, 'moviebytesize' => size }
       search(criteria)
     end
 
-    def search(*criteria)
-
-      @client.call('SearchSubtitles', @token, criteria, { 'timeout' => 20 })
-
+    def self.name_search(filename, *languages)
+      langs = languages.map(&:iso639_2).join(',')
+      criteria = { 'tag' => File.basename(filename), 'sublanguageid'  => langs }
+      search(criteria)
     end
 
+    def self.search(*criteria)
+      response = @client.call('SearchSubtitles', @token, criteria, { 'limit' => 20 })
+      data = response['data']
+      return [] unless data
 
+      data.map do |result|
+        name = result['MovieReleaseName']
+        language = result['LanguageName']
+        link = result['SubDownloadLink']
+        format = result['SubFormat']
+        SearchResult.new(name, link, language, format)
+      end
+    end
   end
-
 end

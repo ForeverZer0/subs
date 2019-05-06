@@ -11,7 +11,7 @@ Gem::Specification.new do |spec|
 
   spec.summary       = %q{Simple and intuitive command-line program to automatically and accurately search and  download subtitles for all of your favorite movies and television shows.}
   spec.description   = %q{TODO: Write a longer description or delete this line.}
-  spec.homepage      = 'TODO: Put your gem\'s website or public repo URL here.'
+  spec.homepage      = 'https://github.com/ForeverZer0/subs'
   spec.license       = 'MIT'
 
   # Specify which files should be added to the gem when it is released.
