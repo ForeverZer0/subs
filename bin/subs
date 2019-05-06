@@ -1,0 +1,72 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'rainbow'
+
+require_relative '../lib/subs'
+
+options = { paths: [], lang: [] }
+
+OptParse.new do |opts|
+
+  opts.on('-iPATH', '--include=PATH', String, 'Directory/filename to include (default: working directory)') do |path|
+    options[:paths] << path
+  end
+
+  opts.on('-lLANG', '--lang=LANG', String, 'Select language(s) to search for (default: eng)') do |lang|
+    size = lang.size
+    language = nil
+    if size == 2
+      language = Subs::Language.from_iso639_1(lang)
+    elsif size == 3
+      language = Subs::Language.from_iso639_2(lang)
+    end
+    if language.nil? && !options[:quiet]
+      opts.warn "\"#{lang}\" is not a valid ISO-639-1 or ISO-639-2 language identifier, ignoring"
+    else
+      options[:lang] << language
+    end
+  end
+
+  opts.on('-r', '--recursive', TrueClass, 'Search directories recursively') do |recursive|
+    options[:recursive] = recursive
+  end
+
+  opts.on('-c', '--clobber', TrueClass, 'Force overwrite of any existing subtitles') do |clobber|
+    options[:clobber] = clobber
+  end
+
+  opts.on('-q', '--quiet', TrueClass, 'Do not write progress to the standard output stream') do |quiet|
+    abort('--quiet and --prompt flags are mutually exclusive') if options[:prompt]
+    options[:quiet] = quiet
+  end
+
+  opts.on('-p', '--prompt', TrueClass, 'Prompt before downloading all found subtitles') do |prompt|
+    abort('--quiet and --prompt flags are mutually exclusive') if options[:quiet]
+    options[:prompt] = prompt
+  end
+
+  opts.on('-l', '--list', 'List all possible language codes that can be used') do
+    langs = Subs::Language.values.sort_by(&:iso639_2)
+    half = (langs.size / 2) + 1
+    (0...half).each do |i|
+      left = langs[i]
+      right = langs[i + half] || Subs::Language.new(nil, nil, nil, nil, nil)
+      ln = left.name[0, 26]
+      printf("%s - %-30s %s %s %-30s\n", Rainbow(left.iso639_2).cyan.bright, ln,
+             Rainbow(right.iso639_2).cyan.bright, right.name.nil? ? '' : '-', right.name)
+    end
+  end
+
+end.parse!
+
+options[:paths] << Dir.pwd if options[:paths].empty?
+options[:lang] << Subs::Language.from_iso639_2('eng') if options[:lang].empty?
+
+def log(text)
+  puts text unless options[:quiet]
+end
+
+
+
+
