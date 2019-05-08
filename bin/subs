@@ -73,6 +73,12 @@ def log(text)
   puts text unless QUIET
 end
 
+def get_choices
+  line = gets.chomp
+  return [] if line.empty?
+  line.split(',').map { |i| i.strip.to_i - 1 }
+end
+
 def status(text)
   $stdout << text unless QUIET
 end
@@ -100,8 +106,6 @@ unless options[:clobber]
   end
 end
 
-
-
 provider = Subs::OpenSubtitles # TODO
 unless provider.connect(options[:lang].first)
   raise Exception, 'failed to connect to provider'
@@ -123,19 +127,29 @@ videos.each do |video|
 
   if options[:prompt]
     log(Rainbow(" Found #{results.size}").green.bright)
-    log(Rainbow("    Select number of file(s) to download (separate with commas)(0 to skip):").aqua)
+    log(Rainbow("    Select number of file(s) to download (separate with commas):").aqua)
     results.each_with_index do |result, i|
       log("    #{Rainbow("#{i + 1})").bright} #{result.name}")
     end
+    choices = get_choices.map { |i| results[i] }.compact
   else
-    choice = [results.first]
+    choices = [results.first]
   end
+
+  if choices.empty?
+    log(Rainbow('Skipping').yellow)
+    next
+  end
+
+
 
   # Process subtitle file(s)
   # choice.each do |result|
   #
   #
   # end
+  #
+  p choices
 
 end
 

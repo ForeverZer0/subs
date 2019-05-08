@@ -1,557 +1,64 @@
 module Subs
 
   ##
-  # Represents a ISO-639-2 compliant language.
+  # Represents an ISO-639-3 defined language, with conversions from parts 2T, 2B, and 1.
   class Language
 
-    ##
-    # @return [String] the name(s) of language. For description purposes only.
     attr_reader :name
+    attr_reader :part3
+    attr_reader :part2b
+    attr_reader :part2t
+    attr_reader :part1
 
-    ##
-    # @return [String?] the ISO-639-1 2-digit language code, or `nil` if none is associated with this language.
-    attr_reader :iso639_1
-
-    ##
-    # @return [String] the ISO-630-2 3-digit language code.
-    attr_reader :iso639_2
-
-    ##
-    # @return [String] the ISO-639-2 code for the language.
-    def to_s
-      @iso639_2
-    end
-
-    ##
-    # Searches for the language with the specified language code.
-    #
-    # @param code [String] A ISO-639-1 language code.
-    #
-    # @return [Language?] The matching language if found, otherwise `nil`.
-    def self.from_iso639_1(code)
-      values.find { |lang| lang.iso639_1.casecmp(code).zero? }
-    end
-
-    ##
-    # Searches for the language with the specified language code.
-    #
-    # @param code [String] A ISO-639-2 language code.
-    #
-    # @return [Language?] The matching language if found, otherwise `nil`.
-    def self.from_iso639_2(code)
-      values.find { |lang| lang.iso639_2.casecmp(code).zero? }
-    end
-
-    ##
-    # Searches known languages and returns an array of possible matches that contain the specified name.
-    #
-    # @param name [String] The name to search.
-    #
-    # @return [Array<Language>] an array of matching languages.
-    def self.from_name(name)
-      values.find_all { |lang| lang.name.include?(name) }
-    end
-
-    ##
-    # @return [Array<Language>] an array containing all supported languages.
-    def self.values
-      # noinspection SpellCheckingInspection
-      # noinspection RubyResolve
-      @values ||= [
-          Language.new("Afar, afar", 'aa', 'aar'),
-          Language.new("Abkhazian", 'ab', 'abk'),
-          Language.new("Achinese", nil, 'ace'),
-          Language.new("Acoli", nil, 'ach'),
-          Language.new("Adangme", nil, 'ada'),
-          Language.new("adyghé", nil, 'ady'),
-          Language.new("Afro-Asiatic (Other)", nil, 'afa'),
-          Language.new("Afrihili", nil, 'afh'),
-          Language.new("Afrikaans", 'af', 'afr'),
-          Language.new("Ainu", nil, 'ain'),
-          Language.new("Akan", 'ak', 'aka'),
-          Language.new("Akkadian", nil, 'akk'),
-          Language.new("Albanian", 'sq', 'alb'),
-          Language.new("Aleut", nil, 'ale'),
-          Language.new("Algonquian languages", nil, 'alg'),
-          Language.new("Southern Altai", nil, 'alt'),
-          Language.new("Amharic", 'am', 'amh'),
-          Language.new("English, Old (ca.450-1100)", nil, 'ang'),
-          Language.new("Apache languages", nil, 'apa'),
-          Language.new("Arabic", 'ar', 'ara'),
-          Language.new("Aramaic", nil, 'arc'),
-          Language.new("Aragonese", 'an', 'arg'),
-          Language.new("Armenian", 'hy', 'arm'),
-          Language.new("Araucanian", nil, 'arn'),
-          Language.new("Arapaho", nil, 'arp'),
-          Language.new("Artificial (Other)", nil, 'art'),
-          Language.new("Arawak", nil, 'arw'),
-          Language.new("Assamese", 'as', 'asm'),
-          Language.new("Asturian", 'at', 'ast'),
-          Language.new("Athapascan languages", nil, 'ath'),
-          Language.new("Australian languages", nil, 'aus'),
-          Language.new("Avaric", 'av', 'ava'),
-          Language.new("Avestan", 'ae', 'ave'),
-          Language.new("Awadhi", nil, 'awa'),
-          Language.new("Aymara", 'ay', 'aym'),
-          Language.new("Azerbaijani", 'az', 'aze'),
-          Language.new("Banda", nil, 'bad'),
-          Language.new("Bamileke languages", nil, 'bai'),
-          Language.new("Bashkir", 'ba', 'bak'),
-          Language.new("Baluchi", nil, 'bal'),
-          Language.new("Bambara", 'bm', 'bam'),
-          Language.new("Balinese", nil, 'ban'),
-          Language.new("Basque", 'eu', 'baq'),
-          Language.new("Basa", nil, 'bas'),
-          Language.new("Baltic (Other)", nil, 'bat'),
-          Language.new("Beja", nil, 'bej'),
-          Language.new("Belarusian", 'be', 'bel'),
-          Language.new("Bemba", nil, 'bem'),
-          Language.new("Bengali", 'bn', 'ben'),
-          Language.new("Berber (Other)", nil, 'ber'),
-          Language.new("Bhojpuri", nil, 'bho'),
-          Language.new("Bihari", 'bh', 'bih'),
-          Language.new("Bikol", nil, 'bik'),
-          Language.new("Bini", nil, 'bin'),
-          Language.new("Bislama", 'bi', 'bis'),
-          Language.new("Siksika", nil, 'bla'),
-          Language.new("Bantu (Other)", nil, 'bnt'),
-          Language.new("Bosnian", 'bs', 'bos'),
-          Language.new("Braj", nil, 'bra'),
-          Language.new("Breton", 'br', 'bre'),
-          Language.new("Batak (Indonesia)", nil, 'btk'),
-          Language.new("Buriat", nil, 'bua'),
-          Language.new("Buginese", nil, 'bug'),
-          Language.new("Bulgarian", 'bg', 'bul'),
-          Language.new("Burmese", 'my', 'bur'),
-          Language.new("Blin", nil, 'byn'),
-          Language.new("Caddo", nil, 'cad'),
-          Language.new("Central American Indian (Other)", nil, 'cai'),
-          Language.new("Carib", nil, 'car'),
-          Language.new("Catalan", 'ca', 'cat'),
-          Language.new("Caucasian (Other)", nil, 'cau'),
-          Language.new("Cebuano", nil, 'ceb'),
-          Language.new("Celtic (Other)", nil, 'cel'),
-          Language.new("Chamorro", 'ch', 'cha'),
-          Language.new("Chibcha", nil, 'chb'),
-          Language.new("Chechen", 'ce', 'che'),
-          Language.new("Chagatai", nil, 'chg'),
-          Language.new("Chinese (simplified)", 'zh', 'chi'),
-          Language.new("Chuukese", nil, 'chk'),
-          Language.new("Mari", nil, 'chm'),
-          Language.new("Chinook jargon", nil, 'chn'),
-          Language.new("Choctaw", nil, 'cho'),
-          Language.new("Chipewyan", nil, 'chp'),
-          Language.new("Cherokee", nil, 'chr'),
-          Language.new("Church Slavic", 'cu', 'chu'),
-          Language.new("Chuvash", 'cv', 'chv'),
-          Language.new("Cheyenne", nil, 'chy'),
-          Language.new("Chamic languages", nil, 'cmc'),
-          Language.new("Coptic", nil, 'cop'),
-          Language.new("Cornish", 'kw', 'cor'),
-          Language.new("Corsican", 'co', 'cos'),
-          Language.new("Creoles and pidgins, English based (Other)", nil, 'cpe'),
-          Language.new("Creoles and pidgins, French-based (Other)", nil, 'cpf'),
-          Language.new("Creoles and pidgins, Portuguese-based (Other)", nil, 'cpp'),
-          Language.new("Cree", 'cr', 'cre'),
-          Language.new("Crimean Tatar", nil, 'crh'),
-          Language.new("Creoles and pidgins (Other)", nil, 'crp'),
-          Language.new("Kashubian", nil, 'csb'),
-          Language.new("Cushitic (Other)' couchitiques, autres langues", nil, 'cus'),
-          Language.new("Czech", 'cs', 'cze'),
-          Language.new("Dakota", nil, 'dak'),
-          Language.new("Danish", 'da', 'dan'),
-          Language.new("Dargwa", nil, 'dar'),
-          Language.new("Dayak", nil, 'day'),
-          Language.new("Delaware", nil, 'del'),
-          Language.new("Slave (Athapascan)", nil, 'den'),
-          Language.new("Dogrib", nil, 'dgr'),
-          Language.new("Dinka", nil, 'din'),
-          Language.new("Divehi", 'dv', 'div'),
-          Language.new("Dogri", nil, 'doi'),
-          Language.new("Dravidian (Other)", nil, 'dra'),
-          Language.new("Duala", nil, 'dua'),
-          Language.new("Dutch, Middle (ca.1050-1350)", nil, 'dum'),
-          Language.new("Dutch", 'nl', 'dut'),
-          Language.new("Dyula", nil, 'dyu'),
-          Language.new("Dzongkha", 'dz', 'dzo'),
-          Language.new("Efik", nil, 'efi'),
-          Language.new("Egyptian (Ancient)", nil, 'egy'),
-          Language.new("Ekajuk", nil, 'eka'),
-          Language.new("Elamite", nil, 'elx'),
-          Language.new("English", 'en', 'eng'),
-          Language.new("English, Middle (1100-1500)", nil, 'enm'),
-          Language.new("Esperanto", 'eo', 'epo'),
-          Language.new("Estonian", 'et', 'est'),
-          Language.new("Ewe", 'ee', 'ewe'),
-          Language.new("Ewondo", nil, 'ewo'),
-          Language.new("Fang", nil, 'fan'),
-          Language.new("Faroese", 'fo', 'fao'),
-          Language.new("Fanti", nil, 'fat'),
-          Language.new("Fijian", 'fj', 'fij'),
-          Language.new("Filipino", nil, 'fil'),
-          Language.new("Finnish", 'fi', 'fin'),
-          Language.new("Finno-Ugrian (Other)", nil, 'fiu'),
-          Language.new("Fon", nil, 'fon'),
-          Language.new("French", 'fr', 'fre'),
-          Language.new("French, Middle (ca.1400-1600)", nil, 'frm'),
-          Language.new("French, Old (842-ca.1400)", nil, 'fro'),
-          Language.new("Frisian", 'fy', 'fry'),
-          Language.new("Fulah", 'ff', 'ful'),
-          Language.new("Friulian", nil, 'fur'),
-          Language.new("Ga", nil, 'gaa'),
-          Language.new("Gayo", nil, 'gay'),
-          Language.new("Gbaya", nil, 'gba'),
-          Language.new("Germanic (Other)", nil, 'gem'),
-          Language.new("Georgian", 'ka', 'geo'),
-          Language.new("German", 'de', 'ger'),
-          Language.new("Geez", nil, 'gez'),
-          Language.new("Gilbertese", nil, 'gil'),
-          Language.new("Gaelic", 'gd', 'gla'),
-          Language.new("Irish", 'ga', 'gle'),
-          Language.new("Galician", 'gl', 'glg'),
-          Language.new("Manx", 'gv', 'glv'),
-          Language.new("German, Middle High (ca.1050-1500)", nil, 'gmh'),
-          Language.new("German, Old High (ca.750-1050)", nil, 'goh'),
-          Language.new("Gondi", nil, 'gon'),
-          Language.new("Gorontalo", nil, 'gor'),
-          Language.new("Gothic", nil, 'got'),
-          Language.new("Grebo", nil, 'grb'),
-          Language.new("Greek, Ancient (to 1453)", nil, 'grc'),
-          Language.new("Greek", 'el', 'ell'),
-          Language.new("Guarani", 'gn', 'grn'),
-          Language.new("Gujarati", 'gu', 'guj'),
-          Language.new("Gwich´in", nil, 'gwi'),
-          Language.new("Haida", nil, 'hai'),
-          Language.new("Haitian", 'ht', 'hat'),
-          Language.new("Hausa", 'ha', 'hau'),
-          Language.new("Hawaiian", nil, 'haw'),
-          Language.new("Hebrew", 'he', 'heb'),
-          Language.new("Herero", 'hz', 'her'),
-          Language.new("Hiligaynon", nil, 'hil'),
-          Language.new("Himachali", nil, 'him'),
-          Language.new("Hindi", 'hi', 'hin'),
-          Language.new("Hittite", nil, 'hit'),
-          Language.new("Hmong", nil, 'hmn'),
-          Language.new("Hiri Motu", 'ho', 'hmo'),
-          Language.new("Croatian", 'hr', 'hrv'),
-          Language.new("Hungarian", 'hu', 'hun'),
-          Language.new("Hupa", nil, 'hup'),
-          Language.new("Iban", nil, 'iba'),
-          Language.new("Igbo", 'ig', 'ibo'),
-          Language.new("Icelandic", 'is', 'ice'),
-          Language.new("Ido", 'io', 'ido'),
-          Language.new("Sichuan Yi", 'ii', 'iii'),
-          Language.new("Ijo", nil, 'ijo'),
-          Language.new("Inuktitut", 'iu', 'iku'),
-          Language.new("Interlingue", 'ie', 'ile'),
-          Language.new("Iloko", nil, 'ilo'),
-          Language.new("Interlingua (International Auxiliary Language Asso", 'ia', 'ina'),
-          Language.new("Indic (Other)", nil, 'inc'),
-          Language.new("Indonesian", 'id', 'ind'),
-          Language.new("Indo-European (Other)", nil, 'ine'),
-          Language.new("Ingush", nil, 'inh'),
-          Language.new("Inupiaq", 'ik', 'ipk'),
-          Language.new("Iranian (Other)", nil, 'ira'),
-          Language.new("Iroquoian languages", nil, 'iro'),
-          Language.new("Italian", 'it', 'ita'),
-          Language.new("Javanese", 'jv', 'jav'),
-          Language.new("Japanese", 'ja', 'jpn'),
-          Language.new("Judeo-Persian", nil, 'jpr'),
-          Language.new("Judeo-Arabic", nil, 'jrb'),
-          Language.new("Kara-Kalpak", nil, 'kaa'),
-          Language.new("Kabyle", nil, 'kab'),
-          Language.new("Kachin", nil, 'kac'),
-          Language.new("Kalaallisut", 'kl', 'kal'),
-          Language.new("Kamba", nil, 'kam'),
-          Language.new("Kannada", 'kn', 'kan'),
-          Language.new("Karen", nil, 'kar'),
-          Language.new("Kashmiri", 'ks', 'kas'),
-          Language.new("Kanuri", 'kr', 'kau'),
-          Language.new("Kawi", nil, 'kaw'),
-          Language.new("Kazakh", 'kk', 'kaz'),
-          Language.new("Kabardian", nil, 'kbd'),
-          Language.new("Khasi", nil, 'kha'),
-          Language.new("Khoisan (Other)", nil, 'khi'),
-          Language.new("Khmer", 'km', 'khm'),
-          Language.new("Khotanese", nil, 'kho'),
-          Language.new("Kikuyu", 'ki', 'kik'),
-          Language.new("Kinyarwanda", 'rw', 'kin'),
-          Language.new("Kirghiz", 'ky', 'kir'),
-          Language.new("Kimbundu", nil, 'kmb'),
-          Language.new("Konkani", nil, 'kok'),
-          Language.new("Komi", 'kv', 'kom'),
-          Language.new("Kongo", 'kg', 'kon'),
-          Language.new("Korean", 'ko', 'kor'),
-          Language.new("Kosraean", nil, 'kos'),
-          Language.new("Kpelle", nil, 'kpe'),
-          Language.new("Karachay-Balkar", nil, 'krc'),
-          Language.new("Kru", nil, 'kro'),
-          Language.new("Kurukh", nil, 'kru'),
-          Language.new("Kuanyama", 'kj', 'kua'),
-          Language.new("Kumyk", nil, 'kum'),
-          Language.new("Kurdish", 'ku', 'kur'),
-          Language.new("Kutenai", nil, 'kut'),
-          Language.new("Ladino", nil, 'lad'),
-          Language.new("Lahnda", nil, 'lah'),
-          Language.new("Lamba", nil, 'lam'),
-          Language.new("Lao", 'lo', 'lao'),
-          Language.new("Latin", 'la', 'lat'),
-          Language.new("Latvian", 'lv', 'lav'),
-          Language.new("Lezghian", nil, 'lez'),
-          Language.new("Limburgan", 'li', 'lim'),
-          Language.new("Lingala", 'ln', 'lin'),
-          Language.new("Lithuanian", 'lt', 'lit'),
-          Language.new("Mongo", nil, 'lol'),
-          Language.new("Lozi", nil, 'loz'),
-          Language.new("Luxembourgish", 'lb', 'ltz'),
-          Language.new("Luba-Lulua", nil, 'lua'),
-          Language.new("Luba-Katanga", 'lu', 'lub'),
-          Language.new("Ganda", 'lg', 'lug'),
-          Language.new("Luiseno", nil, 'lui'),
-          Language.new("Lunda", nil, 'lun'),
-          Language.new("Luo (Kenya and Tanzania)", nil, 'luo'),
-          Language.new("lushai", nil, 'lus'),
-          Language.new("Macedonian", 'mk', 'mac'),
-          Language.new("Madurese", nil, 'mad'),
-          Language.new("Magahi", nil, 'mag'),
-          Language.new("Marshallese", 'mh', 'mah'),
-          Language.new("Maithili", nil, 'mai'),
-          Language.new("Makasar", nil, 'mak'),
-          Language.new("Malayalam", 'ml', 'mal'),
-          Language.new("Mandingo", nil, 'man'),
-          Language.new("Maori", 'mi', 'mao'),
-          Language.new("Austronesian (Other)", nil, 'map'),
-          Language.new("Marathi", 'mr', 'mar'),
-          Language.new("Masai", nil, 'mas'),
-          Language.new("Malay", 'ms', 'may'),
-          Language.new("Moksha", nil, 'mdf'),
-          Language.new("Mandar", nil, 'mdr'),
-          Language.new("Mende", nil, 'men'),
-          Language.new("Irish, Middle (900-1200)", nil, 'mga'),
-          Language.new("Mi'kmaq", nil, 'mic'),
-          Language.new("Minangkabau", nil, 'min'),
-          Language.new("Miscellaneous languages", nil, 'mis'),
-          Language.new("Mon-Khmer (Other)", nil, 'mkh'),
-          Language.new("Malagasy", 'mg', 'mlg'),
-          Language.new("Maltese", 'mt', 'mlt'),
-          Language.new("Manchu", nil, 'mnc'),
-          Language.new("Manipuri", 'ma', 'mni'),
-          Language.new("Manobo languages", nil, 'mno'),
-          Language.new("Mohawk", nil, 'moh'),
-          Language.new("Moldavian", 'mo', 'mol'),
-          Language.new("Mongolian", 'mn', 'mon'),
-          Language.new("Mossi", nil, 'mos'),
-          Language.new("Mirandese", nil, 'mwl'),
-          Language.new("Multiple languages", nil, 'mul'),
-          Language.new("Munda languages", nil, 'mun'),
-          Language.new("Creek", nil, 'mus'),
-          Language.new("Marwari", nil, 'mwr'),
-          Language.new("Mayan languages", nil, 'myn'),
-          Language.new("Erzya", nil, 'myv'),
-          Language.new("Nahuatl", nil, 'nah'),
-          Language.new("North American Indian", nil, 'nai'),
-          Language.new("Neapolitan", nil, 'nap'),
-          Language.new("Nauru", 'na', 'nau'),
-          Language.new("Navajo", 'nv', 'nav'),
-          Language.new("Ndebele, South", 'nr', 'nbl'),
-          Language.new("Ndebele, North", 'nd', 'nde'),
-          Language.new("Ndonga", 'ng', 'ndo'),
-          Language.new("Low German", nil, 'nds'),
-          Language.new("Nepali", 'ne', 'nep'),
-          Language.new("Nepal Bhasa", nil, 'new'),
-          Language.new("Nias", nil, 'nia'),
-          Language.new("Niger-Kordofanian (Other)", nil, 'nic'),
-          Language.new("Niuean", nil, 'niu'),
-          Language.new("Norwegian Nynorsk", 'nn', 'nno'),
-          Language.new("Norwegian Bokmal", 'nb', 'nob'),
-          Language.new("Nogai", nil, 'nog'),
-          Language.new("Norse, Old", nil, 'non'),
-          Language.new("Norwegian", 'no', 'nor'),
-          Language.new("Northern Sotho", nil, 'nso'),
-          Language.new("Nubian languages", nil, 'nub'),
-          Language.new("Classical Newari", nil, 'nwc'),
-          Language.new("Chichewa", 'ny', 'nya'),
-          Language.new("Nyamwezi", nil, 'nym'),
-          Language.new("Nyankole", nil, 'nyn'),
-          Language.new("Nyoro", nil, 'nyo'),
-          Language.new("Nzima", nil, 'nzi'),
-          Language.new("Occitan", 'oc', 'oci'),
-          Language.new("Ojibwa", 'oj', 'oji'),
-          Language.new("Oriya", 'or', 'ori'),
-          Language.new("Oromo", 'om', 'orm'),
-          Language.new("Osage", nil, 'osa'),
-          Language.new("Ossetian", 'os', 'oss'),
-          Language.new("Turkish, Ottoman (1500-1928)", nil, 'ota'),
-          Language.new("Otomian languages", nil, 'oto'),
-          Language.new("Papuan (Other)", nil, 'paa'),
-          Language.new("Pangasinan", nil, 'pag'),
-          Language.new("Pahlavi", nil, 'pal'),
-          Language.new("Pampanga", nil, 'pam'),
-          Language.new("Panjabi", 'pa', 'pan'),
-          Language.new("Papiamento", nil, 'pap'),
-          Language.new("Palauan", nil, 'pau'),
-          Language.new("Persian, Old (ca.600-400 B.C.)", nil, 'peo'),
-          Language.new("Persian", 'fa', 'per'),
-          Language.new("Philippine (Other)", nil, 'phi'),
-          Language.new("Phoenician", nil, 'phn'),
-          Language.new("Pali", 'pi', 'pli'),
-          Language.new("Polish", 'pl', 'pol'),
-          Language.new("Pohnpeian", nil, 'pon'),
-          Language.new("Portuguese", 'pt', 'por'),
-          Language.new("Prakrit languages", nil, 'pra'),
-          Language.new("Provençal, Old (to 1500)", nil, 'pro'),
-          Language.new("Pushto", 'ps', 'pus'),
-          Language.new("Quechua", 'qu', 'que'),
-          Language.new("Rajasthani", nil, 'raj'),
-          Language.new("Rapanui", nil, 'rap'),
-          Language.new("Rarotongan", nil, 'rar'),
-          Language.new("Romance (Other)", nil, 'roa'),
-          Language.new("Raeto-Romance", 'rm', 'roh'),
-          Language.new("Romany", nil, 'rom'),
-          Language.new("Rundi", 'rn', 'run'),
-          Language.new("Aromanian", nil, 'rup'),
-          Language.new("Russian", 'ru', 'rus'),
-          Language.new("Sandawe", nil, 'sad'),
-          Language.new("Sango", 'sg', 'sag'),
-          Language.new("Yakut", nil, 'sah'),
-          Language.new("South American Indian (Other)", nil, 'sai'),
-          Language.new("Salishan languages", nil, 'sal'),
-          Language.new("Samaritan Aramaic", nil, 'sam'),
-          Language.new("Sanskrit", 'sa', 'san'),
-          Language.new("Sasak", nil, 'sas'),
-          Language.new("Santali", nil, 'sat'),
-          Language.new("Serbian", 'sr', 'scc'),
-          Language.new("Sicilian", nil, 'scn'),
-          Language.new("Scots", nil, 'sco'),
-          Language.new("Selkup", nil, 'sel'),
-          Language.new("Semitic (Other)", nil, 'sem'),
-          Language.new("Irish, Old (to 900)", nil, 'sga'),
-          Language.new("Sign Languages", nil, 'sgn'),
-          Language.new("Shan", nil, 'shn'),
-          Language.new("Sidamo", nil, 'sid'),
-          Language.new("Sinhalese", 'si', 'sin'),
-          Language.new("Siouan languages", nil, 'sio'),
-          Language.new("Sino-Tibetan (Other)", nil, 'sit'),
-          Language.new("Slavic (Other)", nil, 'sla'),
-          Language.new("Slovak", 'sk', 'slo'),
-          Language.new("Slovenian", 'sl', 'slv'),
-          Language.new("Southern Sami", nil, 'sma'),
-          Language.new("Northern Sami", 'se', 'sme'),
-          Language.new("Sami languages (Other)", nil, 'smi'),
-          Language.new("Lule Sami", nil, 'smj'),
-          Language.new("Inari Sami", nil, 'smn'),
-          Language.new("Samoan", 'sm', 'smo'),
-          Language.new("Skolt Sami", nil, 'sms'),
-          Language.new("Shona", 'sn', 'sna'),
-          Language.new("Sindhi", 'sd', 'snd'),
-          Language.new("Soninke", nil, 'snk'),
-          Language.new("Sogdian", nil, 'sog'),
-          Language.new("Somali", 'so', 'som'),
-          Language.new("Songhai", nil, 'son'),
-          Language.new("Sotho, Southern", 'st', 'sot'),
-          Language.new("Spanish", 'es', 'spa'),
-          Language.new("Sardinian", 'sc', 'srd'),
-          Language.new("Serer", nil, 'srr'),
-          Language.new("Nilo-Saharan (Other)", nil, 'ssa'),
-          Language.new("Swati", 'ss', 'ssw'),
-          Language.new("Sukuma", nil, 'suk'),
-          Language.new("Sundanese", 'su', 'sun'),
-          Language.new("Susu", nil, 'sus'),
-          Language.new("Sumerian", nil, 'sux'),
-          Language.new("Swahili", 'sw', 'swa'),
-          Language.new("Swedish", 'sv', 'swe'),
-          Language.new("Syriac", 'sy', 'syr'),
-          Language.new("Tahitian", 'ty', 'tah'),
-          Language.new("Tai (Other)", nil, 'tai'),
-          Language.new("Tamil", 'ta', 'tam'),
-          Language.new("Tatar", 'tt', 'tat'),
-          Language.new("Telugu", 'te', 'tel'),
-          Language.new("Timne", nil, 'tem'),
-          Language.new("Tereno", nil, 'ter'),
-          Language.new("Tetum", nil, 'tet'),
-          Language.new("Tajik", 'tg', 'tgk'),
-          Language.new("Tagalog", 'tl', 'tgl'),
-          Language.new("Thai", 'th', 'tha'),
-          Language.new("Tibetan", 'bo', 'tib'),
-          Language.new("Tigre", nil, 'tig'),
-          Language.new("Tigrinya", 'ti', 'tir'),
-          Language.new("Tiv", nil, 'tiv'),
-          Language.new("Tokelau", nil, 'tkl'),
-          Language.new("Klingon", nil, 'tlh'),
-          Language.new("Tlingit", nil, 'tli'),
-          Language.new("Tamashek", nil, 'tmh'),
-          Language.new("Tonga (Nyasa)", nil, 'tog'),
-          Language.new("Tonga (Tonga Islands)", 'to', 'ton'),
-          Language.new("Tok Pisin", nil, 'tpi'),
-          Language.new("Tsimshian", nil, 'tsi'),
-          Language.new("Tswana", 'tn', 'tsn'),
-          Language.new("Tsonga", 'ts', 'tso'),
-          Language.new("Turkmen", 'tk', 'tuk'),
-          Language.new("Tumbuka", nil, 'tum'),
-          Language.new("Tupi languages", nil, 'tup'),
-          Language.new("Turkish", 'tr', 'tur'),
-          Language.new("Altaic (Other)", nil, 'tut'),
-          Language.new("Tuvalu", nil, 'tvl'),
-          Language.new("Twi", 'tw', 'twi'),
-          Language.new("Tuvinian", nil, 'tyv'),
-          Language.new("Udmurt", nil, 'udm'),
-          Language.new("Ugaritic", nil, 'uga'),
-          Language.new("Uighur", 'ug', 'uig'),
-          Language.new("Ukrainian", 'uk', 'ukr'),
-          Language.new("Umbundu", nil, 'umb'),
-          Language.new("Undetermined", nil, 'und'),
-          Language.new("Urdu", 'ur', 'urd'),
-          Language.new("Uzbek", 'uz', 'uzb'),
-          Language.new("Vai", nil, 'vai'),
-          Language.new("Venda", 've', 'ven'),
-          Language.new("Vietnamese", 'vi', 'vie'),
-          Language.new("Volapük", 'vo', 'vol'),
-          Language.new("Votic", nil, 'vot'),
-          Language.new("Wakashan languages", nil, 'wak'),
-          Language.new("Walamo", nil, 'wal'),
-          Language.new("Waray", nil, 'war'),
-          Language.new("Washo", nil, 'was'),
-          Language.new("Welsh", 'cy', 'wel'),
-          Language.new("Sorbian languages", nil, 'wen'),
-          Language.new("Walloon", 'wa', 'wln'),
-          Language.new("Wolof", 'wo', 'wol'),
-          Language.new("Kalmyk", nil, 'xal'),
-          Language.new("Xhosa", 'xh', 'xho'),
-          Language.new("Yao", nil, 'yao'),
-          Language.new("Yapese", nil, 'yap'),
-          Language.new("Yiddish", 'yi', 'yid'),
-          Language.new("Yoruba", 'yo', 'yor'),
-          Language.new("Yupik languages", nil, 'ypk'),
-          Language.new("Zapotec", nil, 'zap'),
-          Language.new("Zenaga", nil, 'zen'),
-          Language.new("Zhuang", 'za', 'zha'),
-          Language.new("Zande", nil, 'znd'),
-          Language.new("Zulu", 'zu', 'zul'),
-          Language.new("Zuni", nil, 'zun'),
-          Language.new("Romanian", 'ro', 'rum'),
-          Language.new("Portuguese (BR)", 'pb', 'pob'),
-          Language.new("Montenegrin", 'me', 'mne'),
-          Language.new("Chinese (traditional)", 'zt', 'zht'),
-          Language.new("Chinese bilingual", 'ze', 'zhe'),
-          Language.new("Portuguese (MZ)", 'pm', 'pom'),
-          Language.new("Extremaduran", 'ex', 'ext')
-      ]
-    end
-
-    ##
-    # @api private
-    # Initializes a new instance of a Language object.
-    #
-    # @param name [String] A description of the language.
-    # @param two_digit [String] The 2-digit ISO-630-1 language code, or `nil` if none exists.
-    # @param three_digit [String] The 3-digit ISO-639-2 language code.
-    #
-    def initialize(name, two_digit, three_digit)
+    def initialize(name, part3, part2b, part2t, part1)
       @name = name
-      @iso639_1 = two_digit
-      @iso639_2 = three_digit
+      @part3 = part3
+      @part2b = part2b
+      @part2t = part2t
+      @part1 = part1
+    end
+
+    def ==(other)
+      other.is_a?(Language) && @part3 == other.part3
+    end
+
+    def self.database
+      unless @database
+        # Database is a monster (almost 8K LOC), so lazy-load the hell out of it, which overwrites this method
+        require_relative 'language_database'
+      end
+      return database
+    end
+
+    def self.to_s
+      @part3
+    end
+
+    def self.from_part3(code)
+      code = format_code(code, 3)
+      return code ? database.find { |language| code == language.part3 } : nil
+    end
+
+    def self.from_part2b(code)
+      code = format_code(code, 3)
+      return code ? database.find { |language| code == language.part2b } : nil
+    end
+
+    def self.from_part2t(code)
+      code = format_code(code, 3)
+      return code ? database.find { |language| code == language.part2t } : nil
+    end
+
+    def self.from_part1(code)
+      code = format_code(code, 2)
+      return code ? database.find { |language| code == language.part1 } : nil
+    end
+
+    private
+
+    def self.format_code(arg, length)
+      code = arg.to_s
+      return code.size == length ? code.to_sym : nil
     end
   end
 end
-
-

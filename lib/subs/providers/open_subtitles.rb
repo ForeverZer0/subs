@@ -1,81 +1,92 @@
 module Subs
+  class OpenSubtitles < Provider
 
-  module OpenSubtitles
+    include HashProvider
+    include LoginProvider
 
-    OSDB_URI = 'https://api.opensubtitles.org:443/xml-rpc'.freeze
-    USER_AGENT = 'subs2'.freeze
-
-    def self.compute_hash(filename)
-      File.open(filename, 'rb') do |stream|
-        fsize = File.size(filename)
-        hash = [fsize & 0xFFFF, (fsize >> 16) & 0xFFFF, 0, 0]
-        8192.times { hash = compute_hash_chunk(hash, stream.read(8).unpack('vvvv')) }
-        offset = fsize - 0x10000
-        stream.seek([0,offset].max, 0)
-        8192.times { hash = compute_hash_chunk(hash, stream.read(8).unpack('vvvv')) }
-        format('%04x%04x%04x%04x', *hash.reverse)
-      end
-    end
-
-    def self.compute_hash_chunk(hash, chunk)
-      result = [0, 0, 0, 0]
-      carry = 0
-      hash.zip(chunk).each_with_index do |(h, i), n|
-        sum = h + i + carry
-        if sum > 0xFFFF
-          result[n] += sum & 0xFFFF
-          carry = 1
-        else
-          result[n] += sum
-          carry = 0
-        end
-      end
-      result
-    end
-
-    def self.connect(language, username = nil, password = nil)
-      # Lazy-load XML-RPC gem
+    def initialize(username = nil, password = nil)
       require 'xmlrpc/client'
-      if username && password
-        password = Digest::MD5.hexdigest(password)
+      super('OpenSubtitles.org', URI('https://api.opensubtitles.org:443/xml-rpc'), 'subs2')
+      @client = XMLRPC::Client.new2(@uri)
+      login(username, password)
+      if block_given?
+        yield self
+        logout
       end
-      @client = XMLRPC::Client.new2(OSDB_URI)
-      code = language.iso639_1 || language.iso639_2
-      result = @client.call('LogIn', username || '', password || '', code, USER_AGENT)
-      @token = result['token']
-      return @token && @token.size > 1
     end
 
-    def self.disconnect
-      return unless @token
-      @client.call('LogOut', @token) rescue nil
+    def login(username = nil, password = nil)
+      password = Digest::MD5.hexdigest(password) if username && password
+      begin
+        response = @client.call(:LogIn, username || '', password || '', 'en', @user_agent)
+        code = response['code'].to_i
+        warn "Failed to login to #{name}" if code == 401
+        @token = response['token']
+        return @token && @token.size > 0
+      rescue
+        return false
+      end
     end
 
-    def self.hash_search(filename, *languages)
-      hash = compute_hash(filename)
-      size = File.size(filename).to_s
-      langs = languages.map(&:iso639_2).join(',')
-      criteria = { 'moviehash' => hash, 'sublanguageid'  => langs, 'moviebytesize' => size }
-      search(criteria)
+    def logout
+      @client.call(:LogOut, @token) rescue nil
     end
 
-    def self.name_search(filename, *languages)
-      langs = languages.map(&:iso639_2).join(',')
-      criteria = { 'tag' => File.basename(filename), 'sublanguageid'  => langs }
-      search(criteria)
+    def process_result(io, result)
+      super
+      begin
+        # Use a string buffer for downloaded data to eliminate need for storing compressed file on disk
+        StringIO.open do |buffer|
+          open(result.data, "rb") { |src| buffer.write(src.read) }
+          buffer.seek(0, IO::SEEK_SET)
+          # Read the buffer and copy the decompressed GZIP stream to the output stream
+          gz = Zlib::GzipReader.new(buffer)
+          io.write(gz.read)
+          gz.close
+        end
+        return true
+      rescue
+        return false
+      end
     end
 
-    def self.search(*criteria)
-      response = @client.call('SearchSubtitles', @token, criteria, { 'limit' => 20 })
-      data = response['data']
-      return [] unless data
+    def compute_hash(path)
+      hash = File.size(path)
+      File.open(path, 'rb') do |io|
+        hash += io.read(65536).unpack('Q*').sum
+        io.seek(-65536, IO::SEEK_END)
+        hash += io.read(65536).unpack('Q*').sum
+      end
+      (hash & 0xFFFFFFFFFFFFFFFF).to_s(16).rjust(16)
+    end
 
-      data.map do |result|
-        name = result['MovieReleaseName']
-        language = result['LanguageName']
-        link = result['SubDownloadLink']
-        format = result['SubFormat']
-        SearchResult.new(name, link, language, format)
+    def hash_search(path, *languages)
+      return [] unless File.exist?(path)
+      lang = languages.map(&:part3).join(',')
+      hash = compute_hash(path)
+      size = File.size(path)
+
+      params = { moviehash: hash, moviebytesize: size, sublanguageid: lang }
+
+      search(path, params)
+    end
+
+    def search(path, *criteria)
+      @limit ||= { limit: 10 }
+      results = []
+      begin
+        response = @client.call(:SearchSubtitles, @token, criteria, @limit)
+        if response['status'] == '200 OK'
+          response['data'].each do |result|
+            name = result['SubFileName']
+            language = Subs::Language.from_part3(result['SubLanguageID'])
+            link = result['SubDownloadLink']
+            results << Subs::SearchResult.new(self.class, name, language, path, link)
+          end
+        end
+        return results
+      rescue
+        return []
       end
     end
   end

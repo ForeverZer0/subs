@@ -1,13 +1,16 @@
 require 'open-uri'
 require 'zlib'
 require 'digest'
+require 'net/http'
+require 'cgi'
+require 'set'
 
 require_relative 'subs/version'
 require_relative 'subs/language'
-require_relative 'subs/movie'
-require_relative 'subs/search_result'
-require_relative 'subs/providers/open_subtitles'
+require_relative 'subs/providers/provider'
 require_relative 'subs/providers/sub_db'
+require_relative 'subs/providers/open_subtitles'
+
 
 module Subs
 
@@ -15,6 +18,10 @@ module Subs
   # Generic exception class for subtitle related errors.
   class Exception < StandardError
   end
+
+  ##
+  # Represents a generic search result for a subtitle
+  SearchResult = Struct.new(:provider, :name, :language, :video, :data)
 
   ##
   # Video extensions to search for.
@@ -56,39 +63,52 @@ module Subs
       # ex. MyFavoriteMovie.2019.srt
       return true if File.exist?(File.join(dir, "#{base}#{ext}"))
       next unless language
-      if language.iso639_1
+      if language.part1
         # ex. MyFavoriteMovie.2019.en.srt
-        return true if File.exist?(File.join(dir, "#{base}.#{language.iso639_1}#{ext}"))
+        return true if File.exist?(File.join(dir, "#{base}.#{language.part1}#{ext}"))
       end
       # ex. MyFavoriteMovie.2019.eng.srt
-      return true if File.exist?(File.join(dir, "#{base}.#{language.iso639_2}#{ext}"))
+      return true if File.exist?(File.join(dir, "#{base}.#{language.part3}#{ext}"))
     end
     # Not found
     false
   end
 
   ##
-  # Downloads a GZIP file into memory, and extracts its contents to the specified filename.
+  # Creates a query string to be used within a URI based on specified parameters.
   #
-  # @param link [String] A full URL of the GZIP file to download.
-  # @param filename [String] The file to write the contents to.
+  # @param params [Hash<Symbol, Object>] A hash of keyword arguments that are used to build the query.
   #
-  # @return [Boolean] `true` if successful, otherwise `false` if error occurred.
-  #
-  def self.download_extract(link, filename)
-    begin
-      File.open(filename, 'wb') do |io|
-        StringIO.open do |buffer|
-          open(link, "rb") { |gz| buffer.write(gz.read) }
-          buffer.seek(0)
-          reader = Zlib::GzipReader.new(buffer)
-          io.write(reader.read)
-        end
-      end
-      return true
-    rescue
-      return false
+  # @return [String] The constructed query string.
+  def self.query_string(**params)
+    query = ''
+    params.each_pair do |key, value|
+      next unless value
+      query << (query.size.zero? ? '?' : '&')
+      query << CGI.escape(key.to_s)
+      query << '='
+      query << CGI.escape(value.to_s)
     end
+    query
   end
 
+  def self.build_subtitle_path(path, language, ext = '.srt')
+    dir = File.dirname(path)
+    base = File.basename(path, File.extname(path))
+    File.join(dir, "#{base}.#{language.part3}#{ext}")
+  end
+
+end
+
+eng = Subs::Language.from_part1(:en)
+
+
+lang = Subs::Language.new('English', 'eng', 'eng', 'eng', 'en')
+Subs::OpenSubtitles.new('eric') do |db|
+  video = '/storage/movies/Third Person (2013) [1080p]/Third.Person.2013.1080p.BluRay.x264.YIFY.mp4'
+  # video = '/home/eric/Downloads/breakdance.avi'
+
+  r = db.hash_search(video, lang).first
+
+  p db.is_a? Subs::HashProvider
 end
