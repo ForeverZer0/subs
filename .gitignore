@@ -1,6 +1,9 @@
 /.bundle/
 /.yardoc
 /_yardoc/
+/.idea
+/.vs
+/.vscode
 /coverage/
 /doc/
 /pkg/
