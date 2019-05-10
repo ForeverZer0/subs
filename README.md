@@ -29,9 +29,9 @@ Once installed, open a terminal/command window and use the following basic synta
 subs COMMAND [ARGUMENTS] [OPTIONS]
 ```
 
-Subs can run in a fully-automatic mode that will can recursively search folders for video files, find matching subtitles, and download/rename them appropriately, or fully-manual one file at a time and you select the subtitle from a list, or anywhere in between, the choice is yours.
+Subs can run in a fully-automatic mode that will recursively search folders for video files, find matching subtitles, and download/rename them appropriately, or fully-manual one file at a time and you select the subtitle from a list, or anywhere in between, the choice is yours.
 
-You are encouraged to the [Wiki](https://github.com/ForeverZer0/subs/wiki) for full explanation of each command, but you can see a list of available commands, use the following command:
+You are encouraged to the view the [Wiki](https://github.com/ForeverZer0/subs/wiki) for a full explanation of each command, but to quickly see a list of available commands, use the following command:
 ```
 subs --help
 ```
