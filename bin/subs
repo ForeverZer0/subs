@@ -7,7 +7,7 @@ require_relative '../lib/subs'
 module Subs
   class CLI < Thor
 
-    class_option :version, type: :boolean, desc: 'Display version string', aliases: '-v', default: false
+    class_option :version, type: :boolean, desc: 'Display version string', aliases: '-v'
     class_option :quiet, type: :boolean, desc: 'Do not show any output', aliases: '-q'
     class_option :debug, type: :boolean, desc: 'Show more verbose output', aliases: '-d'
 
@@ -78,19 +78,42 @@ module Subs
       process_results(results)
     end
 
-    desc 'offset <srt-file> [+|-]<seconds>', 'Offsets subtitle timings by number of seconds (decimal values supported)'
+    desc 'sync <path> [+|-]<ms>', 'Offsets SubRip subtitle timings by number of milliseconds'
     method_option :backup, type: :boolean, desc: 'Backup original file', aliases: '-b'
-    def offset(path, seconds)
+    def sync(path, ms)
       unless File.exist?(path)
         Subs.log.error { "Cannot resolve path '#{path}'"}
         return
       end
       return if options[:backup] && !backup_file(path)
+      match = /^([+-])?(\d+)$/.match(ms)
+      unless match
+        Subs.log.error { "Invalid offset parameter #{ms}".red }
+        exit
+      end
+      offset = Integer(ms)
+      regex = /^(\d{2}):(\d{2}):(\d{2}),(\d+) --> (\d{2}):(\d{2}):(\d{2}),(\d+)$/
+      buffer = StringIO.new
 
+      begin
+        File.open(path, 'rb').each do |line|
 
-      offset = Time.at(seconds.to_f)
+          match = regex.match(line)
+          unless match
+            buffer.write(line)
+            next
+          end
 
-      p offset
+          t1 = Subs::SubRipTime.new(*match[1..4].map(&:to_i)) + offset
+          t2 = Subs::SubRipTime.new(*match[5..8].map(&:to_i)) + offset
+          buffer.write("#{t1} --> #{t2}\n")
+        end
+
+        buffer.seek(0, IO::SEEK_SET)
+        File.open(path, 'wb') { |io| io.write(buffer.read) }
+      rescue
+        Subs.log.error { "Error occurred during subtilte re-sync".red }
+      end
     end
 
     desc 'config <name> <value>', 'Sets and stores a configuration option to persist across each run'
@@ -152,20 +175,21 @@ module Subs
       end
 
       def backup_file(path)
-        unless File.exist?(file)
+        unless File.exist?(path)
           Subs.log.error { "Cannot resolve path '#{path}'"}
           return false
         end
-        bak = File.expand_path(file) + '.bak'
+        bak = File.expand_path(path) + '.bak'
         if File.exist?(bak)
           Subs.log.debug { "Backup file '#{bak}' already exists" }
           return true
         end
+
         begin
           File.open(bak, 'wb') do |dest|
             File.open(path, 'rb') { |src| dest.write(src.read) }
           end
-          Subs.info.debug { "Back up '#{path}' successful" }
+          Subs.log.debug { "Back up of #{path.yellow} was successful" }
           return true
         rescue
           Subs.log.error { "Error occurred during backup of '#{path}'"}
@@ -260,200 +284,3 @@ module Subs
 end
 
 Subs::CLI.start(ARGV)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-__END__
-
-require 'optparse'
-
-
-options = { paths: [], lang: [], method: :hash }
-
-OptParse.new do |opts|
-
-  opts.on('-i', '--include=PATH', String, 'Directory/filename to include (default: working directory)') do |path|
-    options[:paths] << path
-  end
-
-  opts.on('-l', '--lang=LANG', String, 'Select language(s) to search for (default: eng)') do |lang|
-    size = lang.size
-    language = nil
-    if size == 2
-      language = Subs::Language.from_alpha2(lang)
-    elsif size == 3
-      language = Subs::Language.from_alpha3(lang)
-    end
-    if language.nil? && !options[:quiet]
-      opts.warn "\"#{lang}\" is not a valid ISO-639-1 or ISO-639-2 language identifier, ignoring"
-    else
-      options[:lang] << language
-    end
-  end
-
-  opts.on('-r', '--recursive', TrueClass, 'Search directories recursively') do |recursive|
-    options[:recursive] = recursive
-  end
-
-  opts.on('-c', '--clobber', TrueClass, 'Force overwrite of any existing subtitles') do |clobber|
-    options[:clobber] = clobber
-  end
-
-  opts.on('-q', '--quiet', TrueClass, 'Prevents any messages from being written to the output stream') do |quiet|
-    options[:quiet] = quiet
-  end
-
-  opts.on('-d', '--debug', TrueClass, 'View extended output information') do |debug|
-    options[:debug] = debug
-  end
-
-  opts.on('-p', '--prompt', TrueClass, 'Prompt before downloading each subtitle') do |prompt|
-    options[:prompt] = prompt
-  end
-
-  opts.on('-m', '--method=(hash|name)', 'Select the search method (default: hash)') do |meth|
-    options[:method] = meth.casecmp('name').zero? ? :name : :hash
-  end
-
-end.parse!
-
-options[:paths] << Dir.pwd if options[:paths].empty?
-options[:lang] << Subs::Language::ENGLISH if options[:lang].empty?
-
-if options[:quiet] && !options[:debug] && !options[:prompt]
-  Subs.create_log(StringIO.new, :fatal)
-elsif options[:debug]
-  Subs.create_log(STDOUT, :debug)
-end
-
-# Compile list of videos to process
-videos = options[:paths].flat_map do |path|
-  if File.directory?(path)
-    Subs.video_search(path, options[:recursive])
-  else
-    [File.expand_path(path)]
-  end
-end
-
-# Reject videos that already have subtitles unless "clobber" option is present
-count = videos.count
-Subs.log.info { "Found #{count.to_s.light_blue} supported videos"}
-unless options[:clobber]
-  videos.reject! { |v| Subs.subtitle_exist?(v, *options[:lang]) }
-  if videos.count != count
-    diff = count - videos.count
-    Subs.log.info { "Existing subtitles found for #{diff.to_s.light_blue}, skipping." }
-  end
-end
-
-providers = [Subs::SubDB, Subs::OpenSubtitles]
-choices = []
-
-videos.each do |video|
-  base_name = File.basename(video)
-
-  results = []
-  providers.each do |klass|
-    klass.new do |provider|
-      case options[:method]
-      when :hash
-        next unless provider.is_a?(Subs::HashSearcher)
-        results += provider.hash_search(video, *options[:lang])
-      when :name
-        next unless provider.is_a?(Subs::FilenameSearcher)
-        results += provider.filename_search(video, *options[:lang])
-      else
-        Subs.log.error { 'Invalid search method'.red }
-      end
-    end
-
-
-  end
-
-  if results.empty?
-    Subs.log.info { "#{'0'.red} results found for #{base_name}"}
-    next
-  else
-    Subs.log.info { "#{results.count.to_s.light_blue} results found for #{base_name}"}
-  end
-
-  if options[:prompt]
-    puts
-    puts "Select subtitle(s) to download for #{base_name.light_blue}"
-    results.each_with_index do |result, i|
-      puts "  #{(i + 1).to_s.rjust(2).yellow}. #{result.name} (#{result.provider_name.blue})"
-    end
-    puts
-    STDOUT << "Input choice(s) (Leave blank to skip):  "
-
-    input = gets.chomp.strip
-    input.split(/\W|,/).each do |choice|
-      next if choice.empty?
-      num = choice.to_i - 1
-      next if num < 0
-      if results[num]
-        choices << results[num]
-      end
-    end
-
-  else
-    choices << results.first
-  end
-end
-
-if choices.empty?
-  Subs.log.info { "No results to process." }
-  exit
-end
-
-Subs.log.info { 'Begin result processing...' }
-count = 0
-# Separate results by providers...
-choices.group_by(&:provider).each_pair do |klass, results|
-
-  klass.new do |provider|
-    results.each do |result|
-      begin
-        path = Subs.build_subtitle_path(result.video, result.language, '.srt')
-        File.open(path, 'wb') { |io| provider.process_result(io, result) }
-        count += 1
-      rescue
-        Subs.log.error { "An error occurred processing #{result.name}"}
-      end
-    end
-  end
-end
-
-Subs.log.info { "Finished processing #{count} subtitle(s).".green }

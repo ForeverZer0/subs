@@ -7,6 +7,7 @@ require 'set'
 
 require_relative 'subs/version'
 require_relative 'subs/language'
+require_relative 'subs/sub_rip_time'
 require_relative 'subs/providers/provider'
 require_relative 'subs/providers/sub_db'
 require_relative 'subs/providers/open_subtitles'
