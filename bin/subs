@@ -1,25 +1,272 @@
 #!/usr/bin/env ruby
 
-require 'optparse'
-require 'rainbow'
-
+require 'thor'
+require 'json'
 require_relative '../lib/subs'
+
+
+module Subs
+  class CLI < Thor
+
+    CONFIG_PATH = File.expand_path('~/.subs')
+    PROVIDERS = [SubDB, OpenSubtitles]
+
+    def initialize(*args)
+      super(*args)
+
+      if options[:quiet]
+        Subs.create_log(STDOUT, :fatal)
+      elsif options[:debug]
+        Subs.create_log(STDOUT, :debug)
+      end
+
+      begin
+        @config = JSON.parse(File.read(CONFIG_PATH))
+        Subs.log.debug { "Configuration loaded successfully" }
+      rescue
+        Subs.log.debug { "Failed to load user configuration, using default" }
+        @config = default_config
+      end
+    end
+
+    desc 'find [PATH1 [,PATH2]]... [OPTIONS]', 'Input file/directory path(s) that video files will be searched for', long_desc: 'Can you see me'
+    method_option :recursive, type: :boolean, desc: 'Search directories recursively', aliases: '-r', default: false
+    method_option :clobber, type: :boolean, desc: 'Overwrite existing subtitles', aliases: '-c', default: false
+    method_option :auto, type: :boolean,  desc: 'Automatically select best match and fetch without prompt', aliases: '-a', default: true
+    method_option :method, type: :string, desc: 'Sets the search method', aliases: '-m', enum: %w(hash name any), default: 'hash'
+    method_option :provider, type: :string, desc: 'Set which subtitles provider(s) are used', aliases: '-p', enum: %w(all subdb osdb), default: 'all'
+    method_option :language, type: :string, desc: 'ISO-639 language code for desired subtitle language', aliases: '-l'
+    method_option :test, type: :boolean, desc: 'Perform a dry-run without writing anything to disk', aliases: '-t'
+    def find(*paths)
+      # Compile list of videos to process
+      paths.push(Dir.pwd) if paths.empty?
+      videos = build_video_list(*paths)
+      # Parse our arguments
+      language = get_language(options[:language] || @config[:language])
+      providers = get_providers(options[:provider])
+      Subs.log.info { "Found #{videos.size.to_s.light_blue} videos to query"}
+      # Perform search
+      results = {}
+      videos.each do |video|
+        # Skip searching for videos that already have subtitles unless --clobber flag was passed
+        if !options[:clobber] && Subs.subtitle_exist?(video, language)
+          Subs.log.info { "Skipping #{File.basename(video).yellow}" }
+          next
+        end
+        # Create instance of each provider, and apply specified search methods for each
+        results[video] = []
+        providers.each do |klass|
+          klass.new do |provider|
+            results[video] += search(provider, video, language, options[:method].to_sym)
+          end
+        end
+        Subs.log.info { "Found #{results[video].size.to_s.light_blue} results for #{File.basename(video).yellow}"}
+      end
+
+
+
+    end
+
+    desc 'offset <srt-file> [+|-]<seconds>', 'Offsets subtitle timings by number of seconds (decimal values supported)'
+    method_option :backup, type: :boolean, desc: 'Backup original file', aliases: '-b'
+    def offset(path, seconds)
+      unless File.exist?(path)
+        Subs.log.error { "Cannot resolve path '#{path}'"}
+        return
+      end
+      return if options[:backup] && !backup_file(path)
+
+
+      offset = Time.at(seconds.to_f)
+
+      p offset
+    end
+
+    desc 'config <name> <value>', 'Sets and stores a configuration option to persist across each run'
+    def config(name, value)
+      begin
+        key = name.to_sym
+        if value.nil? && @config.has_key?(key)
+          @config.delete(key)
+          return
+        end
+        @config[key] = value
+      rescue
+        Subs.log.error { 'Error occurred setting configuration option' }
+      end
+    end
+
+    class_option :version, desc: 'Display version string', aliases: '-v', banner: '-v, [--version]'
+    class_option :quiet, type: :boolean, desc: 'Do not show any output', aliases: '-q'
+    class_option :debug, type: :boolean, desc: 'Show more verbose output', aliases: '-d'
+
+    map %w[-v --version] => :version
+
+    no_commands do
+
+      def version
+        say "Subs v.#{Subs::VERSION}"
+      end
+
+      def default_config
+        # Make half-attempt at getting the actual system language, otherwise just go with English
+        begin
+          env = ENV['LANG']
+          match = /([a-z]{2})_[A-Z][A-Z]\..+/.match(env)
+          language = Language.from_alpha2(match[1]).alpha3
+        rescue
+          language = 'eng'
+        end
+
+        {
+            language: language,
+            credentials: {}
+        }
+      end
+
+      def build_video_list(*paths)
+        videos = []
+        paths.each do |path|
+          if File.directory?(path)
+            videos += Subs.video_search(path, options[:recursive])
+          elsif File.exist?(path)
+            ext = File.extname(path)
+            Subs.log.warn { "Unrecognized video extension: ''#{ext}''" } unless Subs::VIDEO_EXTENSIONS.include?(ext)
+            videos << File.expand_path(path)
+          else
+            Subs.log.warn { "Unable to resolve path '#{path}', skipping" }
+          end
+        end
+        videos
+      end
+
+      def prune_list(videos)
+        # Reject videos that already have subtitles unless "clobber" option is present
+        count = videos.count
+        videos.reject! { |v| Subs.subtitle_exist?(v, *options[:lang]) }
+        if videos.count != count
+          diff = count - videos.count
+          Subs.log.info { "Existing subtitles found for #{diff.to_s.light_blue}, skipping." }
+        end
+      end
+
+      def backup_file(path)
+        unless File.exist?(file)
+          Subs.log.error { "Cannot resolve path '#{path}'"}
+          return false
+        end
+        bak = File.expand_path(file) + '.bak'
+        if File.exist?(bak)
+          Subs.log.debug { "Backup file '#{bak}' already exists" }
+          return true
+        end
+        begin
+          File.open(bak, 'wb') do |dest|
+            File.open(path, 'rb') { |src| dest.write(src.read) }
+          end
+          Subs.info.debug { "Back up '#{path}' successful" }
+          return true
+        rescue
+          Subs.log.error { "Error occurred during backup of '#{path}'"}
+          return false
+        end
+      end
+
+      def get_providers(name)
+        return case name
+        when 'all' then PROVIDERS
+        when 'subdb' then [SubDB]
+        when 'osdb' then [OpenSubtitles]
+        else
+          Subs.log.error { "Invalid provider: #{name}" }
+          exit
+        end
+      end
+
+      def get_language(language)
+        language = language || @config[:language]
+        iso639 = case language.size
+        when 2 then Language.from_alpha2(language)
+        when 3 then Language.from_alpha3(language)
+        else nil
+        end
+        unless iso639
+          Subs.log.error { "Unsupported language code specified: #{language}"}
+          exit
+        end
+        iso639
+      end
+
+      def search(provider, video, language, method)
+        results = []
+        if provider.is_a?(HashSearcher) && (method == :hash || method == :any)
+          results += provider.hash_search(video, language)
+        end
+        if provider.is_a?(FilenameSearcher) && (method == :name || (method == :any && results.empty?))
+          results += provider.filename_search(video, language)
+        end
+        results
+      end
+    end
+  end
+end
+
+Subs::CLI.start(ARGV)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+__END__
+
+require 'optparse'
+
 
 options = { paths: [], lang: [], method: :hash }
 
 OptParse.new do |opts|
 
-  opts.on('-iPATH', '--include=PATH', String, 'Directory/filename to include (default: working directory)') do |path|
+  opts.on('-i', '--include=PATH', String, 'Directory/filename to include (default: working directory)') do |path|
     options[:paths] << path
   end
 
-  opts.on('-lLANG', '--lang=LANG', String, 'Select language(s) to search for (default: eng)') do |lang|
+  opts.on('-l', '--lang=LANG', String, 'Select language(s) to search for (default: eng)') do |lang|
     size = lang.size
     language = nil
     if size == 2
-      language = Subs::Language.from_iso639_1(lang)
+      language = Subs::Language.from_alpha2(lang)
     elsif size == 3
-      language = Subs::Language.from_iso639_2(lang)
+      language = Subs::Language.from_alpha3(lang)
     end
     if language.nil? && !options[:quiet]
       opts.warn "\"#{lang}\" is not a valid ISO-639-1 or ISO-639-2 language identifier, ignoring"
@@ -36,55 +283,31 @@ OptParse.new do |opts|
     options[:clobber] = clobber
   end
 
-  opts.on('-q', '--quiet', TrueClass, 'Do not write progress to the standard output stream') do |quiet|
-    abort('--quiet and --prompt flags are mutually exclusive') if options[:prompt]
+  opts.on('-q', '--quiet', TrueClass, 'Prevents any messages from being written to the output stream') do |quiet|
     options[:quiet] = quiet
   end
 
+  opts.on('-d', '--debug', TrueClass, 'View extended output information') do |debug|
+    options[:debug] = debug
+  end
+
   opts.on('-p', '--prompt', TrueClass, 'Prompt before downloading each subtitle') do |prompt|
-    abort('--quiet and --prompt flags are mutually exclusive') if options[:quiet]
     options[:prompt] = prompt
   end
 
-  opts.on('-l', '--list', 'List all possible language codes that can be used') do
-    langs = Subs::Language.values.sort_by(&:iso639_2)
-    half = (langs.size / 2) + 1
-    (0...half).each do |i|
-      left = langs[i]
-      right = langs[i + half] || Subs::Language.new(nil, nil, nil)
-      ln = left.name[0, 26]
-      printf("%s - %-30s %s %s %-30s\n", Rainbow(left.iso639_2).cyan.bright, ln,
-             Rainbow(right.iso639_2).cyan.bright, right.name.nil? ? '' : '-', right.name)
-    end
-  end
-
-  opts.on('-m(hash|name)', '--method=(hash|name)', 'Select the search method (default: hash)') do |meth|
+  opts.on('-m', '--method=(hash|name)', 'Select the search method (default: hash)') do |meth|
     options[:method] = meth.casecmp('name').zero? ? :name : :hash
   end
 
 end.parse!
 
 options[:paths] << Dir.pwd if options[:paths].empty?
-options[:lang] << Subs::Language.from_iso639_2('eng') if options[:lang].empty?
+options[:lang] << Subs::Language::ENGLISH if options[:lang].empty?
 
-QUIET = options[:quiet]
-
-def log(text)
-  puts text unless QUIET
-end
-
-def get_choices
-  line = gets.chomp
-  return [] if line.empty?
-  line.split(',').map { |i| i.strip.to_i - 1 }
-end
-
-def status(text)
-  $stdout << text unless QUIET
-end
-
-def warning(text)
-  puts Rainbow(text).yellow unless QUIET
+if options[:quiet] && !options[:debug] && !options[:prompt]
+  Subs.create_log(StringIO.new, :fatal)
+elsif options[:debug]
+  Subs.create_log(STDOUT, :debug)
 end
 
 # Compile list of videos to process
@@ -98,61 +321,91 @@ end
 
 # Reject videos that already have subtitles unless "clobber" option is present
 count = videos.count
-log("Found #{count} videos to process.")
+Subs.log.info { "Found #{count.to_s.light_blue} supported videos"}
 unless options[:clobber]
   videos.reject! { |v| Subs.subtitle_exist?(v, *options[:lang]) }
   if videos.count != count
-    log("Subtitles found for #{count - videos.count} videos, #{Rainbow('skipping').yellow}.")
+    diff = count - videos.count
+    Subs.log.info { "Existing subtitles found for #{diff.to_s.light_blue}, skipping." }
   end
 end
 
-provider = Subs::OpenSubtitles # TODO
-unless provider.connect(options[:lang].first)
-  raise Exception, 'failed to connect to provider'
-end
-
+providers = [Subs::SubDB, Subs::OpenSubtitles]
+choices = []
 
 videos.each do |video|
-  # Gets results using selected provider and method
-  status("Processing \"#{File.basename(video)}\"...")
-  results = options[:method] == :name ?
-                provider.name_search(video, *options[:lang]) :
-                provider.hash_search(video, *options[:lang])
+  base_name = File.basename(video)
 
-  # Continue if no results were found
+  results = []
+  providers.each do |klass|
+    klass.new do |provider|
+      case options[:method]
+      when :hash
+        next unless provider.is_a?(Subs::HashSearcher)
+        results += provider.hash_search(video, *options[:lang])
+      when :name
+        next unless provider.is_a?(Subs::FilenameSearcher)
+        results += provider.filename_search(video, *options[:lang])
+      else
+        Subs.log.error { 'Invalid search method'.red }
+      end
+    end
+
+
+  end
+
   if results.empty?
-    status(" #{Rainbow('No Results').red}\n")
+    Subs.log.info { "#{'0'.red} results found for #{base_name}"}
     next
+  else
+    Subs.log.info { "#{results.count.to_s.light_blue} results found for #{base_name}"}
   end
 
   if options[:prompt]
-    log(Rainbow(" Found #{results.size}").green.bright)
-    log(Rainbow("    Select number of file(s) to download (separate with commas):").aqua)
+    puts
+    puts "Select subtitle(s) to download for #{base_name.light_blue}"
     results.each_with_index do |result, i|
-      log("    #{Rainbow("#{i + 1})").bright} #{result.name}")
+      puts "  #{(i + 1).to_s.rjust(2).yellow}. #{result.name} (#{result.provider_name.blue})"
     end
-    choices = get_choices.map { |i| results[i] }.compact
+    puts
+    STDOUT << "Input choice(s) (Leave blank to skip):  "
+
+    input = gets.chomp.strip
+    input.split(/\W|,/).each do |choice|
+      next if choice.empty?
+      num = choice.to_i - 1
+      next if num < 0
+      if results[num]
+        choices << results[num]
+      end
+    end
+
   else
-    choices = [results.first]
+    choices << results.first
   end
-
-  if choices.empty?
-    log(Rainbow('Skipping').yellow)
-    next
-  end
-
-
-
-  # Process subtitle file(s)
-  # choice.each do |result|
-  #
-  #
-  # end
-  #
-  p choices
-
 end
 
+if choices.empty?
+  Subs.log.info { "No results to process." }
+  exit
+end
 
+Subs.log.info { 'Begin result processing...' }
+count = 0
+# Separate results by providers...
+choices.group_by(&:provider).each_pair do |klass, results|
 
+  klass.new do |provider|
+    results.each do |result|
+      begin
+        path = Subs.build_subtitle_path(result.video, result.language, '.srt')
+        File.open(path, 'wb') { |io| provider.process_result(io, result) }
+        count += 1
+      rescue
+        Subs.log.error { "An error occurred processing #{result.name}"}
+      end
+    end
+  end
+end
 
+Subs.log.info { "Finished processing #{count} subtitle(s).".green }

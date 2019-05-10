@@ -13,13 +13,16 @@ module Subs
     end
 
     def process_result(io, result)
+      Subs.log.debug { "Processing '#{result.name}'"}
       unless self.is_a?(result.provider)
-        raise Subs::Exception, 'result cannot be processed by this provider'
+        Subs.log.error { "#{@name} cannot process #{result.provider_name} result"}
+        return false
       end
+      true
     end
   end
 
-  module HashProvider
+  module HashSearcher
 
     def compute_hash(path)
     end
@@ -36,4 +39,17 @@ module Subs
     end
   end
 
+  module FilenameSearcher
+
+    def filename_search(path, *larnguages)
+      Array.new
+    end
+  end
+
+  module IMDbSearcher
+
+    def imdb_search(path, imdb_code, *languages)
+      Array.new
+    end
+  end
 end
