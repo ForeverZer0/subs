@@ -4,11 +4,19 @@ require 'thor'
 require 'json'
 require_relative '../lib/subs'
 
-
 module Subs
   class CLI < Thor
 
-    CONFIG_PATH = File.expand_path('~/.subs')
+    class_option :version, type: :boolean, desc: 'Display version string', aliases: '-v', default: false
+    class_option :quiet, type: :boolean, desc: 'Do not show any output', aliases: '-q'
+    class_option :debug, type: :boolean, desc: 'Show more verbose output', aliases: '-d'
+
+    if Dir.exist?(File.expand_path('~/.config'))
+      CONFIG_PATH = File.expand_path('~/.config/subs.json')
+    else
+      CONFIG_PATH = File.expand_path('~/.subs')
+    end
+
     PROVIDERS = [SubDB, OpenSubtitles]
 
     def initialize(*args)
@@ -20,16 +28,21 @@ module Subs
         Subs.create_log(STDOUT, :debug)
       end
 
+      if options[:version] != options[:quiet]
+        say "Subs v.#{Subs::VERSION}"
+      end
+
       begin
-        @config = JSON.parse(File.read(CONFIG_PATH))
+        @config = JSON.parse(File.read(CONFIG_PATH), symbolize_names: true)
         Subs.log.debug { "Configuration loaded successfully" }
       rescue
         Subs.log.debug { "Failed to load user configuration, using default" }
         @config = default_config
+        File.open(CONFIG_PATH, 'wb') { |io| io.write(JSON.pretty_generate(@config)) } rescue nil
       end
     end
 
-    desc 'find [PATH1 [,PATH2]]... [OPTIONS]', 'Input file/directory path(s) that video files will be searched for', long_desc: 'Can you see me'
+    desc 'find [PATH1 [,PATH2]]... [OPTIONS]', 'Input file/directory path(s) that video files will be searched for'
     method_option :recursive, type: :boolean, desc: 'Search directories recursively', aliases: '-r', default: false
     method_option :clobber, type: :boolean, desc: 'Overwrite existing subtitles', aliases: '-c', default: false
     method_option :auto, type: :boolean,  desc: 'Automatically select best match and fetch without prompt', aliases: '-a', default: true
@@ -62,9 +75,7 @@ module Subs
         end
         Subs.log.info { "Found #{results[video].size.to_s.light_blue} results for #{File.basename(video).yellow}"}
       end
-
-
-
+      process_results(results)
     end
 
     desc 'offset <srt-file> [+|-]<seconds>', 'Offsets subtitle timings by number of seconds (decimal values supported)'
@@ -91,22 +102,13 @@ module Subs
           return
         end
         @config[key] = value
+        File.open(CONFIG_PATH, 'wb') { |io| io.write(JSON.pretty_generate(@config)) }
       rescue
         Subs.log.error { 'Error occurred setting configuration option' }
       end
     end
 
-    class_option :version, desc: 'Display version string', aliases: '-v', banner: '-v, [--version]'
-    class_option :quiet, type: :boolean, desc: 'Do not show any output', aliases: '-q'
-    class_option :debug, type: :boolean, desc: 'Show more verbose output', aliases: '-d'
-
-    map %w[-v --version] => :version
-
     no_commands do
-
-      def version
-        say "Subs v.#{Subs::VERSION}"
-      end
 
       def default_config
         # Make half-attempt at getting the actual system language, otherwise just go with English
@@ -117,7 +119,6 @@ module Subs
         rescue
           language = 'eng'
         end
-
         {
             language: language,
             credentials: {}
@@ -183,15 +184,15 @@ module Subs
         end
       end
 
-      def get_language(language)
-        language = language || @config[:language]
-        iso639 = case language.size
-        when 2 then Language.from_alpha2(language)
-        when 3 then Language.from_alpha3(language)
+      def get_language(code)
+        code = code || @config[:language]
+        iso639 = case code.size
+        when 2 then Language.from_alpha2(code)
+        when 3 then Language.from_alpha3(code)
         else nil
         end
         unless iso639
-          Subs.log.error { "Unsupported language code specified: #{language}"}
+          Subs.log.error { "Unsupported language code specified: #{code}"}
           exit
         end
         iso639
@@ -199,13 +200,60 @@ module Subs
 
       def search(provider, video, language, method)
         results = []
+        # Search by hash if :hash or :any flag
         if provider.is_a?(HashSearcher) && (method == :hash || method == :any)
           results += provider.hash_search(video, language)
         end
+        # Search by filename if :name flag, or :any flag and hash search failed
         if provider.is_a?(FilenameSearcher) && (method == :name || (method == :any && results.empty?))
           results += provider.filename_search(video, language)
         end
         results
+      end
+
+      def process_results(results)
+        choices = []
+        results.each_pair do |video, list|
+          # Continue if no results for video
+          next if list.empty?
+          # Pick the first result (most probable) if --auto switch is set
+          if options[:auto]
+            choices << list.first
+            next
+          end
+          say
+          say "Select subtitle for #{File.basename(video).yellow}"
+          list.each_with_index do |result, i|
+            puts "  #{(i + 1).to_s.rjust(2).light_blue}. #{result.name} (#{result.provider_name.blue})"
+          end
+          say
+          input = ask 'Input number of choice, or leave blank to skip:  '
+          i = input.chomp.strip.to_i rescue 0
+          choices << list[i - 1] if i > 0
+        end
+        # Process the pruned results
+        process_choices(choices.compact)
+      end
+
+      def process_choices(results)
+        Subs.log.info { "Processing #{results.size.to_s.light_blue} results..." }
+        # Group results by which provider they use
+        results.group_by(&:provider).each_pair do |klass, list|
+          klass.new do |provider|
+            # Instantiate the provider and process the results
+            list.each do |result|
+              name = File.basename(result.video).yellow
+              begin
+                path = Subs.build_subtitle_path(result.video, result.language)
+                File.open(path, 'wb') { |io| provider.process_result(io, result) }
+                Subs.log.info { "  Successfully processed #{name}".green }
+              rescue
+                Subs.log.error { "  Failed to process #{name}".red }
+              end
+            end
+          end
+        end
+        Subs.log.info { "Processing complete" }
       end
     end
   end

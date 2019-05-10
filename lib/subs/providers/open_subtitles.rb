@@ -5,6 +5,7 @@ module Subs
     include LoginProvider
     include FilenameSearcher
     include IMDbSearcher
+    include CredentialProvider
 
     def initialize(username = nil, password = nil)
       require 'xmlrpc/client'

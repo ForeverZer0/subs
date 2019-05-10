@@ -22,6 +22,9 @@ module Subs
     end
   end
 
+  module CredentialProvider
+  end
+
   module HashSearcher
 
     def compute_hash(path)
